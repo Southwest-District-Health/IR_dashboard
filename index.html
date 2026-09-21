@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yearly Incidence Rate by County and Condition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<style>
+  :root {
+    --bar:        #c98a93;
+    --suppressed: #d9a441;
+    --none:       #9ca3af;
+    --ink:        #000000;
+    --muted:      #000000;
+    --line:       #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: Inter, "Segoe UI", Verdana, sans-serif;
+    color: var(--ink);
+    background: linear-gradient(180deg, #f6f8f9 0%, #eaf0f1 100%);
+    min-height: 100vh;
+  }
+  .app-title {
+    padding: 18px 24px;
+    margin-bottom: 18px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 0.9rem;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  }
+  .app-title h1 { margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: 0.2px; }
+  .app-title p {
+    margin: 6px 0 0;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: #000;
+    line-height: 1.5;
+  }
+  .layout { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .sidebar {
+    flex: 0 0 260px;
+    background: #fff;
+    border-radius: 0.9rem;
+    padding: 18px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  .plot-card {
+    flex: 1 1 520px;
+    background: #fff;
+    border-radius: 0.9rem;
+    padding: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #000;
+    margin-bottom: 6px;
+  }
+  select {
+    width: 100%;
+    margin-bottom: 18px;
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 0.92rem;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.5rem;
+  }
+  select:focus-visible { outline: 2px solid var(--bar); outline-offset: 1px; }
+  .note { margin: 0; font-size: 0.8rem; line-height: 1.5; color: #000; }
+  .note + .note { margin-top: 10px; }
+  select:disabled { background: #f2f4f5; color: #000; opacity: 1; -webkit-text-fill-color: #000; }
+  #scopeNote {
+    margin: -8px 0 18px;
+    padding-left: 10px;
+    border-left: 3px solid var(--suppressed);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #000;
+  }
+  #scopeNote[hidden] { display: none; }
+  @media (max-width: 640px) { .sidebar { flex: 1 1 100%; } }
+</style>
+</head>
+<body>
+
+<div class="app-title">
+  <h1 id="pageTitle"></h1>
+  <p>Incidence rate refers to the number of new cases of a disease occurring in a defined
+  population within a specified time period, expressed per 100,000 individuals.</p>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <label for="condition">Select condition</label>
+    <select id="condition"></select>
+
+    <label for="county">Select county</label>
+    <select id="county"></select>
+    <p id="scopeNote" hidden></p>
+
+    <p class="note">Rates are shown only when there were 5 or more cases in a year.
+    Rarely reported conditions, those with fewer than 5 cases in every county and every
+    year, are shown for Health District 3 as a whole.</p>
+    <p class="note" id="popNote"></p>
+  </div>
+
+  <div class="plot-card">
+    <div id="chart" style="height:480px;"></div>
+  </div>
+</div>
+
+<script>
+const P = {"title":"Yearly Incidence Rate per 100,000 population (2018 - 2025)","conditions":["Acute flaccid myelitis","AIDS","Botulism, infant","Campylobacteriosis","Chlamydia trachomatis infection","Cryptosporidiosis","Dengue","Elevated Blood Lead","Giardiasis","Gonorrhea","Group A Streptococcus, invasive","Haemophilus influenzae, invasive","Hantavirus pulmonary syndrome","Hepatitis A, acute","Hepatitis B virus infection, Chronic","Hepatitis B, acute","Hepatitis C, Acute","Hepatitis C, chronic","HIV","Legionellosis","Leptospirosis","Listeriosis","Lyme disease","Malaria","Measles (Rubeola)","Monkeypox","Mumps","Neisseria meningitidis, invasive (Mening. disease)","Noroviruses","Pertussis","Pneumocystis pneumonia (PCP)","Q fever, Acute","Q fever, Chronic","Rabies PEP","Rabies, animal","Relapsing Fever (tick and louse-borne)","Respiratory syncytial virus (RSV)","S. aureus, coag+, meth- or oxi- resistant (MRSA)","Salmonella Paratyphi (A, B, and C)","Salmonella Typhi (S. Typhi)","Salmonellosis","Shiga toxin-producing Escherichia coli (STEC)","Shigellosis","Spotted Fever Rickettsiosis","Streptococcus pneumoniae, invasive disease (IPD)","Syphilis, congenital","Syphilis, early non-primary, non-secondary","Syphilis, primary","Syphilis, secondary","Syphilis, unknown duration or late","Toxic-shock syndrome,staphylococcal","Transmissible spongiform encephalopathies (TSEs)","Tuberculosis","Tularemia","Vibrio parahaemolyticus","West Nile virus neuroinvasive disease","West Nile virus non-neuroinvasive disease","Yersiniosis (non-pestis)","Zika virus disease, non-congenital"],"rare":["Acute flaccid myelitis","Botulism, infant","Dengue","Hantavirus pulmonary syndrome","Hepatitis B, acute","Hepatitis C, Acute","Leptospirosis","Listeriosis","Lyme disease","Malaria","Monkeypox","Mumps","Neisseria meningitidis, invasive (Mening. disease)","Q fever, Acute","Q fever, Chronic","Rabies, animal","Relapsing Fever (tick and louse-borne)","Salmonella Paratyphi (A, B, and C)","Salmonella Typhi (S. Typhi)","Spotted Fever Rickettsiosis","Streptococcus pneumoniae, invasive disease (IPD)","Syphilis, congenital","Toxic-shock syndrome,staphylococcal","Transmissible spongiform encephalopathies (TSEs)","Tularemia","Vibrio parahaemolyticus","West Nile virus non-neuroinvasive disease","Zika virus disease, non-congenital"],"districtLabel":"Health District 3","rareNote":"This condition is rarely reported, so it is shown for Health District 3 as a whole. County-level rates are not published for conditions this uncommon.","counties":["Adams","Canyon","Gem","Owyhee","Payette","Washington"],"years":["2018","2019","2020","2021","2022","2023","2024","2025"],"defaultCondition":"Campylobacteriosis","defaultCounty":"Canyon","threshold":5,"popNote":"Population: U.S. Census Bureau county population estimates (Vintage 2019 for 2018–2019; Vintage 2025 for 2020–2025).","series":{"AIDS||Adams":[0,0,0,0,0,0,0,0],"AIDS||Canyon":["<5",2.61,"<5","<5","<5","<5","<5",0],"AIDS||Gem":[0,"<5",0,0,0,"<5",0,0],"AIDS||Owyhee":[0,0,0,0,0,"<5",0,0],"AIDS||Payette":["<5","<5",0,0,0,0,0,0],"AIDS||Washington":[0,0,0,0,0,0,0,0],"Acute flaccid myelitis||Health District 3":[0,0,0,0,"<5",0,0,0],"Botulism, infant||Health District 3":["<5",0,"<5","<5",0,0,0,0],"Campylobacteriosis||Adams":["<5","<5",0,0,"<5","<5","<5","<5"],"Campylobacteriosis||Canyon":[31.8,30.89,24.03,28.72,35,34.77,48.98,40.71],"Campylobacteriosis||Gem":[51.17,27.61,25.94,30.3,"<5",23.61,37.3,32.15],"Campylobacteriosis||Owyhee":["<5",76.12,"<5",72.82,94.92,54.84,101.85,63.19],"Campylobacteriosis||Payette":[63.81,41.75,23.46,45.49,37.14,25.67,36.13,43.13],"Campylobacteriosis||Washington":[0,78.48,"<5","<5","<5","<5","<5","<5"],"Chlamydia trachomatis infection||Adams":[212.56,"<5","<5",194.85,146.5,224.72,"<5","<5"],"Chlamydia trachomatis infection||Canyon":[535.31,579.95,513.3,424.68,389.82,348.09,339.51,319.49],"Chlamydia trachomatis infection||Gem":[261.56,375.44,243.84,181.8,111.5,179.41,130.54,105.64],"Chlamydia trachomatis infection||Owyhee":[497.04,456.74,416.91,202.27,205.66,164.51,321.22,236.95],"Chlamydia trachomatis infection||Payette":[391.37,338.19,301.05,170.58,196.84,172.34,252.9,186.89],"Chlamydia trachomatis infection||Washington":[346.02,176.57,284.2,256.83,214.71,200.05,182.74,155.4],"Cryptosporidiosis||Adams":[0,"<5",0,0,0,"<5",0,0],"Cryptosporidiosis||Canyon":[9.86,2.61,4.72,"<5","<5",3.86,"<5",1.82],"Cryptosporidiosis||Gem":[0,0,"<5","<5",0,0,"<5",0],"Cryptosporidiosis||Owyhee":["<5",0,0,0,0,0,0,0],"Cryptosporidiosis||Payette":["<5",20.88,0,22.74,"<5","<5","<5","<5"],"Cryptosporidiosis||Washington":["<5","<5",0,0,"<5",0,"<5","<5"],"Dengue||Health District 3":[0,0,0,0,0,0,"<5","<5"],"Elevated Blood Lead||Adams":[0,0,0,0,0,0,0,0],"Elevated Blood Lead||Canyon":["<5",3.05,"<5","<5",3.18,2.7,2.99,3.27],"Elevated Blood Lead||Gem":["<5","<5",0,0,0,0,0,0],"Elevated Blood Lead||Owyhee":["<5","<5","<5",0,0,0,"<5","<5"],"Elevated Blood Lead||Payette":["<5","<5","<5",0,"<5","<5","<5","<5"],"Elevated Blood Lead||Washington":[0,0,0,0,"<5","<5",0,0],"Giardiasis||Adams":["<5",0,0,0,"<5",0,0,"<5"],"Giardiasis||Canyon":[6.27,6.53,3.86,9.03,3.98,5.41,2.99,6.91],"Giardiasis||Gem":["<5","<5","<5","<5","<5",0,"<5","<5"],"Giardiasis||Owyhee":[0,"<5",0,0,0,"<5","<5","<5"],"Giardiasis||Payette":["<5",0,"<5","<5","<5",0,"<5","<5"],"Giardiasis||Washington":[0,0,0,"<5",0,"<5","<5",0],"Gonorrhea||Adams":[0,0,"<5","<5","<5",0,0,0],"Gonorrhea||Canyon":[82.87,145.75,124.46,87.81,64.44,48.68,48.98,36.71],"Gonorrhea||Gem":[28.43,27.61,124.51,75.75,"<5","<5","<5",0],"Gonorrhea||Owyhee":[51.42,93.04,108.4,0,"<5","<5","<5",0],"Gonorrhea||Payette":[68.06,"<5",97.74,87.19,55.71,36.67,"<5",25.16],"Gonorrhea||Washington":[49.43,"<5",56.84,82.55,"<5","<5","<5","<5"],"Group A Streptococcus, invasive||Adams":[0,0,"<5",0,0,0,0,"<5"],"Group A Streptococcus, invasive||Canyon":[4.03,4.79,3.86,3.28,3.18,6.57,5.23,5.45],"Group A Streptococcus, invasive||Gem":["<5",0,0,"<5",0,"<5",0,0],"Group A Streptococcus, invasive||Owyhee":[0,0,0,0,0,0,0,"<5"],"Group A Streptococcus, invasive||Payette":["<5","<5",0,"<5","<5","<5","<5","<5"],"Group A Streptococcus, invasive||Washington":[0,"<5",0,"<5",0,0,"<5","<5"],"HIV||Adams":[0,0,"<5",0,0,0,0,0],"HIV||Canyon":[3.14,3.48,7.3,4.51,9.15,4.64,7.48,9.09],"HIV||Gem":[0,0,0,"<5","<5",0,0,"<5"],"HIV||Owyhee":[0,0,"<5",0,0,"<5",0,0],"HIV||Payette":[0,"<5","<5","<5","<5","<5","<5",0],"HIV||Washington":[0,0,0,"<5",0,0,"<5",0],"Haemophilus influenzae, invasive||Adams":[0,0,0,0,0,0,0,0],"Haemophilus influenzae, invasive||Canyon":["<5",2.61,"<5","<5","<5","<5","<5",1.82],"Haemophilus influenzae, invasive||Gem":["<5",0,0,"<5",0,0,0,0],"Haemophilus influenzae, invasive||Owyhee":[0,0,0,"<5",0,"<5",0,"<5"],"Haemophilus influenzae, invasive||Payette":["<5","<5",0,0,0,0,0,"<5"],"Haemophilus influenzae, invasive||Washington":[0,0,0,0,0,0,0,0],"Hantavirus pulmonary syndrome||Health District 3":[0,"<5",0,0,0,0,0,"<5"],"Hepatitis A, acute||Adams":[0,0,"<5",0,0,0,0,0],"Hepatitis A, acute||Canyon":[0,5.66,2.15,"<5","<5","<5","<5",0],"Hepatitis A, acute||Gem":[0,0,0,0,0,0,0,0],"Hepatitis A, acute||Owyhee":[0,"<5","<5",0,0,0,0,0],"Hepatitis A, acute||Payette":[0,"<5","<5",0,"<5",0,0,0],"Hepatitis A, acute||Washington":[0,0,"<5",0,0,0,0,0],"Hepatitis B virus infection, Chronic||Adams":["<5",0,0,0,0,0,0,0],"Hepatitis B virus infection, Chronic||Canyon":[5.82,4.35,4.29,2.05,3.18,5.02,2.62,4.36],"Hepatitis B virus infection, Chronic||Gem":[0,0,0,0,"<5",0,0,0],"Hepatitis B virus infection, Chronic||Owyhee":[0,"<5",0,0,0,0,0,0],"Hepatitis B virus infection, Chronic||Payette":[0,0,"<5",0,0,0,0,"<5"],"Hepatitis B virus infection, Chronic||Washington":[0,"<5",0,0,0,0,"<5",0],"Hepatitis B, acute||Health District 3":["<5",0,0,0,"<5",0,0,"<5"],"Hepatitis C, Acute||Health District 3":["<5",1.68,0,0,"<5","<5","<5","<5"],"Hepatitis C, chronic||Adams":["<5","<5","<5",108.25,"<5","<5","<5",0],"Hepatitis C, chronic||Canyon":[83.77,76.14,75.97,87.4,61.26,59.5,36.64,28.35],"Hepatitis C, chronic||Gem":[119.41,88.34,88.2,90.9,58.18,37.77,55.94,59.71],"Hepatitis C, chronic||Owyhee":[59.99,59.21,"<5",105.18,71.19,"<5","<5","<5"],"Hepatitis C, chronic||Payette":[85.08,79.33,117.29,94.77,77.99,73.34,72.26,43.13],"Hepatitis C, chronic||Washington":["<5","<5",47.37,"<5",71.57,"<5",43.51,51.8],"Legionellosis||Adams":[0,"<5",0,0,0,0,0,0],"Legionellosis||Canyon":["<5",2.18,"<5","<5","<5","<5","<5","<5"],"Legionellosis||Gem":[0,0,0,0,0,0,0,0],"Legionellosis||Owyhee":[0,0,0,0,0,0,"<5",0],"Legionellosis||Payette":[0,"<5",0,0,0,"<5","<5",0],"Legionellosis||Washington":[0,0,0,0,0,0,0,0],"Leptospirosis||Health District 3":[0,0,0,0,0,0,0,"<5"],"Listeriosis||Health District 3":["<5","<5",0,0,0,0,"<5","<5"],"Lyme disease||Health District 3":["<5",0,0,0,0,0,"<5",0],"Malaria||Health District 3":[0,0,0,"<5","<5","<5","<5","<5"],"Measles (Rubeola)||Adams":[0,0,0,0,0,0,0,0],"Measles (Rubeola)||Canyon":[0,0,0,0,0,3.86,0,0],"Measles (Rubeola)||Gem":[0,0,0,0,0,0,0,0],"Measles (Rubeola)||Owyhee":[0,0,0,0,0,0,0,0],"Measles (Rubeola)||Payette":[0,0,0,0,0,0,0,0],"Measles (Rubeola)||Washington":[0,0,0,0,0,0,0,0],"Monkeypox||Health District 3":[0,0,0,0,0,"<5",0,0],"Mumps||Health District 3":[0,0,0,0,"<5","<5","<5",0],"Neisseria meningitidis, invasive (Mening. disease)||Health District 3":["<5","<5",0,0,0,0,0,"<5"],"Noroviruses||Adams":[0,0,0,0,0,"<5","<5",0],"Noroviruses||Canyon":[7.62,7.83,2.58,23.8,7.96,5.41,20.19,18.9],"Noroviruses||Gem":[0,0,0,0,77.57,"<5","<5","<5"],"Noroviruses||Owyhee":["<5",0,0,"<5",0,0,"<5","<5"],"Noroviruses||Payette":[0,"<5",0,0,"<5",0,"<5",21.56],"Noroviruses||Washington":["<5",0,"<5",0,0,0,0,"<5"],"Pertussis||Adams":[188.95,"<5","<5",0,0,0,0,"<5"],"Pertussis||Canyon":[68.54,27.41,29.61,"<5","<5","<5",86.75,66.88],"Pertussis||Gem":["<5","<5","<5",0,0,0,23.31,32.15],"Pertussis||Owyhee":[42.85,84.58,"<5",0,"<5",0,54.84,"<5"],"Pertussis||Payette":[25.52,"<5",23.46,0,0,0,43.35,35.94],"Pertussis||Washington":[69.2,"<5",0,0,0,0,"<5","<5"],"Pneumocystis pneumonia (PCP)||Adams":[0,"<5",0,0,0,0,0,0],"Pneumocystis pneumonia (PCP)||Canyon":["<5","<5","<5","<5","<5",0,1.87,"<5"],"Pneumocystis pneumonia (PCP)||Gem":[0,0,0,0,0,0,0,0],"Pneumocystis pneumonia (PCP)||Owyhee":[0,0,0,0,0,0,0,0],"Pneumocystis pneumonia (PCP)||Payette":[0,"<5",0,0,0,0,0,"<5"],"Pneumocystis pneumonia (PCP)||Washington":[0,0,0,0,0,0,0,"<5"],"Q fever, Acute||Health District 3":[0,0,0,"<5","<5","<5",0,0],"Q fever, Chronic||Health District 3":[0,0,0,0,0,0,"<5",0],"Rabies PEP||Adams":[0,0,0,0,"<5",0,0,0],"Rabies PEP||Canyon":[5.82,10.44,6.01,3.69,"<5",2.32,4.11,5.09],"Rabies PEP||Gem":["<5","<5",0,0,"<5","<5",0,0],"Rabies PEP||Owyhee":[0,"<5",0,0,0,0,0,"<5"],"Rabies PEP||Payette":[0,"<5","<5","<5",0,"<5","<5",0],"Rabies PEP||Washington":["<5",0,"<5",0,0,"<5","<5",0],"Rabies, animal||Health District 3":[0,"<5","<5","<5","<5","<5",0,"<5"],"Relapsing Fever (tick and louse-borne)||Health District 3":[0,0,"<5",0,0,0,0,0],"Respiratory syncytial virus (RSV)||Adams":["<5",116.44,"<5",194.85,"<5","<5",199.6,119.69],"Respiratory syncytial virus (RSV)||Canyon":[124.98,101.37,53.65,187.52,285.21,89.63,219.49,155.93],"Respiratory syncytial virus (RSV)||Gem":[62.55,71.78,"<5",60.6,135.74,51.94,46.62,68.89],"Respiratory syncytial virus (RSV)||Owyhee":[59.99,59.21,58.37,105.18,197.75,62.67,195.86,71.08],"Respiratory syncytial virus (RSV)||Payette":[123.37,116.91,46.92,140.26,144.85,139.34,108.39,97.04],"Respiratory syncytial virus (RSV)||Washington":["<5",49.05,"<5",73.38,"<5",52.19,43.51,69.07],"S. aureus, coag+, meth- or oxi- resistant (MRSA)||Adams":[0,0,0,0,0,0,"<5","<5"],"S. aureus, coag+, meth- or oxi- resistant (MRSA)||Canyon":[6.27,6.96,4.29,3.69,5.97,31.29,27.67,10.54],"S. aureus, coag+, meth- or oxi- resistant (MRSA)||Gem":["<5","<5",0,"<5",0,23.61,37.3,36.74],"S. aureus, coag+, meth- or oxi- resistant (MRSA)||Owyhee":["<5","<5","<5","<5",0,"<5","<5","<5"],"S. aureus, coag+, meth- or oxi- resistant (MRSA)||Payette":["<5",29.23,"<5","<5",18.57,"<5",32.52,17.97],"S. aureus, coag+, meth- or oxi- resistant (MRSA)||Washington":["<5",0,"<5","<5",0,43.49,"<5","<5"],"Salmonella Paratyphi (A, B, and C)||Health District 3":[0,0,0,"<5",0,0,0,0],"Salmonella Typhi (S. Typhi)||Health District 3":[0,0,0,0,0,"<5",0,0],"Salmonellosis||Adams":[0,0,0,0,"<5","<5","<5","<5"],"Salmonellosis||Canyon":[13.44,8.27,12.02,6.15,8.35,16.23,8.6,11.99],"Salmonellosis||Gem":["<5","<5","<5",0,"<5","<5","<5","<5"],"Salmonellosis||Owyhee":["<5","<5",0,"<5","<5","<5","<5",0],"Salmonellosis||Payette":[25.52,"<5",19.55,"<5","<5","<5","<5","<5"],"Salmonellosis||Washington":["<5","<5","<5",0,0,"<5","<5",0],"Shiga toxin-producing Escherichia coli (STEC)||Adams":[0,"<5","<5","<5","<5","<5",0,"<5"],"Shiga toxin-producing Escherichia coli (STEC)||Canyon":[16.57,7.4,8.15,11.9,8.35,3.86,6.73,10.54],"Shiga toxin-producing Escherichia coli (STEC)||Gem":[28.43,"<5","<5","<5",24.24,"<5","<5","<5"],"Shiga toxin-producing Escherichia coli (STEC)||Owyhee":["<5","<5","<5","<5","<5","<5","<5",0],"Shiga toxin-producing Escherichia coli (STEC)||Payette":[21.27,"<5","<5","<5",26,"<5",32.52,28.75],"Shiga toxin-producing Escherichia coli (STEC)||Washington":["<5",0,"<5",45.86,"<5","<5","<5","<5"],"Shigellosis||Adams":[0,0,0,0,"<5",0,0,0],"Shigellosis||Canyon":[7.62,3.05,"<5",2.46,"<5","<5","<5",1.82],"Shigellosis||Gem":[0,0,0,0,0,0,"<5",0],"Shigellosis||Owyhee":["<5","<5",0,0,0,0,"<5",0],"Shigellosis||Payette":["<5",0,0,0,"<5","<5","<5",0],"Shigellosis||Washington":[0,0,0,0,0,0,0,0],"Spotted Fever Rickettsiosis||Health District 3":[1.72,0,0,0,0,0,0,0],"Streptococcus pneumoniae, invasive disease (IPD)||Health District 3":["<5","<5","<5","<5","<5","<5","<5","<5"],"Syphilis, congenital||Health District 3":[0,"<5",0,"<5",0,0,0,0],"Syphilis, early non-primary, non-secondary||Adams":[0,0,0,0,0,0,0,0],"Syphilis, early non-primary, non-secondary||Canyon":["<5","<5","<5",4.92,4.77,2.7,"<5","<5"],"Syphilis, early non-primary, non-secondary||Gem":[0,"<5",0,0,"<5",0,0,0],"Syphilis, early non-primary, non-secondary||Owyhee":[0,0,0,0,0,0,0,0],"Syphilis, early non-primary, non-secondary||Payette":[0,0,"<5",0,0,"<5",0,0],"Syphilis, early non-primary, non-secondary||Washington":[0,0,0,0,0,"<5",0,0],"Syphilis, primary||Adams":[0,0,0,0,0,0,0,0],"Syphilis, primary||Canyon":["<5","<5",5.15,9.85,9.55,"<5","<5","<5"],"Syphilis, primary||Gem":[0,0,0,"<5",0,0,0,0],"Syphilis, primary||Owyhee":[0,0,"<5",0,0,0,0,0],"Syphilis, primary||Payette":[0,0,0,"<5","<5",0,0,0],"Syphilis, primary||Washington":[0,0,0,0,0,0,"<5",0],"Syphilis, secondary||Adams":[0,0,0,0,0,0,0,0],"Syphilis, secondary||Canyon":["<5",0,"<5","<5",3.18,6.18,3.74,"<5"],"Syphilis, secondary||Gem":[0,0,0,0,"<5",0,0,0],"Syphilis, secondary||Owyhee":[0,0,0,0,0,"<5",0,0],"Syphilis, secondary||Payette":[0,0,0,"<5","<5",0,"<5","<5"],"Syphilis, secondary||Washington":[0,0,0,0,0,0,0,0],"Syphilis, unknown duration or late||Adams":[0,0,0,0,0,0,0,0],"Syphilis, unknown duration or late||Canyon":[4.48,3.48,6.44,8.21,6.36,6.95,3.37,4.36],"Syphilis, unknown duration or late||Gem":[0,0,0,0,"<5","<5",0,0],"Syphilis, unknown duration or late||Owyhee":[0,0,"<5",0,"<5","<5",0,0],"Syphilis, unknown duration or late||Payette":[0,0,"<5",0,"<5","<5","<5",0],"Syphilis, unknown duration or late||Washington":[0,0,"<5","<5",0,0,0,0],"Toxic-shock syndrome,staphylococcal||Health District 3":[0,0,0,0,0,0,"<5",0],"Transmissible spongiform encephalopathies (TSEs)||Health District 3":["<5","<5",0,0,0,"<5","<5","<5"],"Tuberculosis||Adams":[0,0,0,0,0,0,0,0],"Tuberculosis||Canyon":["<5","<5",0,0,0,"<5","<5",2.18],"Tuberculosis||Gem":[0,0,"<5",0,0,"<5",0,0],"Tuberculosis||Owyhee":[0,0,0,"<5",0,0,"<5",0],"Tuberculosis||Payette":["<5",0,0,0,0,0,0,"<5"],"Tuberculosis||Washington":[0,0,0,0,0,0,0,0],"Tularemia||Health District 3":[0,0,0,"<5","<5","<5","<5",0],"Vibrio parahaemolyticus||Health District 3":["<5",0,0,0,0,0,0,0],"West Nile virus neuroinvasive disease||Adams":[0,0,0,"<5",0,0,0,0],"West Nile virus neuroinvasive disease||Canyon":["<5",0,0,"<5","<5",2.7,"<5",0],"West Nile virus neuroinvasive disease||Gem":[0,0,"<5",0,0,"<5","<5",0],"West Nile virus neuroinvasive disease||Owyhee":["<5","<5",0,"<5",0,"<5",0,0],"West Nile virus neuroinvasive disease||Payette":[0,0,0,0,0,"<5",0,0],"West Nile virus neuroinvasive disease||Washington":["<5","<5",0,"<5",0,43.49,0,0],"West Nile virus non-neuroinvasive disease||Health District 3":["<5",2.01,"<5","<5","<5","<5",0,"<5"],"Yersiniosis (non-pestis)||Adams":[0,0,0,0,0,0,0,0],"Yersiniosis (non-pestis)||Canyon":["<5","<5",0,"<5","<5",2.32,"<5","<5"],"Yersiniosis (non-pestis)||Gem":[0,0,0,0,0,0,0,"<5"],"Yersiniosis (non-pestis)||Owyhee":[0,0,0,0,0,0,0,"<5"],"Yersiniosis (non-pestis)||Payette":[0,0,0,0,"<5",0,0,"<5"],"Yersiniosis (non-pestis)||Washington":[0,0,"<5",0,0,0,0,0],"Zika virus disease, non-congenital||Health District 3":[0,"<5",0,0,0,0,0,0]}};
+
+const COL = { bar: "#c98a93", suppressed: "#d9a441", none: "#9ca3af",
+              ink: "#000000", grid: "#e7e7ea", axis: "#000000" };
+const FONT = 'Inter, Verdana, sans-serif';
+
+const conditionSel = document.getElementById("condition");
+const countySel    = document.getElementById("county");
+
+document.getElementById("pageTitle").textContent = P.title;
+document.getElementById("popNote").textContent = P.popNote;
+
+function fill(sel, values) {
+  values.forEach(v => {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = v;
+    sel.appendChild(o);
+  });
+}
+const RARE = new Set(P.rare || []);
+const scopeNote = document.getElementById("scopeNote");
+
+function addGroup(sel, label, values) {
+  if (!values.length) return;
+  const g = document.createElement("optgroup");
+  g.label = label;
+  fill(g, values);
+  sel.appendChild(g);
+}
+
+const regular = P.conditions.filter(c => !RARE.has(c));
+const rare    = P.conditions.filter(c =>  RARE.has(c));
+if (rare.length) {
+  addGroup(conditionSel, "Regularly reported", regular);
+  addGroup(conditionSel, "Rarely reported", rare);
+} else {
+  fill(conditionSel, P.conditions);
+}
+fill(countySel, P.counties);
+
+function pick(sel, value) {
+  if (!value) return;
+  const hit = Array.from(sel.options)
+    .find(o => o.value.toLowerCase() === String(value).toLowerCase());
+  if (hit) sel.value = hit.value;
+}
+pick(conditionSel, P.defaultCondition);
+pick(countySel, P.defaultCounty);
+
+// ?condition=...&county=... lets another page link to a specific view
+const params = new URLSearchParams(window.location.search);
+pick(conditionSel, params.get("condition"));
+pick(countySel, params.get("county"));
+
+let savedCounty = countySel.value;
+function showDistrict(on) {
+  let opt = countySel.querySelector('option[data-district]');
+  if (on) {
+    if (!countySel.disabled) savedCounty = countySel.value;
+    if (!opt) {
+      opt = document.createElement("option");
+      opt.value = P.districtLabel;
+      opt.textContent = P.districtLabel;
+      opt.dataset.district = "1";
+      countySel.appendChild(opt);
+    }
+    countySel.value = P.districtLabel;
+    countySel.disabled = true;
+  } else {
+    if (opt) opt.remove();
+    if (countySel.disabled) countySel.value = savedCounty;
+    countySel.disabled = false;
+  }
+}
+
+function fmtRate(v) {
+  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function draw() {
+  const condition = conditionSel.value;
+  const isRare    = RARE.has(condition);
+  const place     = isRare ? P.districtLabel : countySel.value;
+  const years     = P.years;
+  const values    = P.series[condition + "||" + place] || years.map(() => 0);
+
+  // A rarely reported condition has no county breakdown to offer, so the
+  // county box shows the district instead and remembers the county choice
+  showDistrict(isRare);
+  scopeNote.hidden = !isRare;
+  if (isRare) scopeNote.textContent = P.rareNote;
+
+  const barX = [], barY = [], barText = [];
+  const supX = [], noneX = [];
+
+  values.forEach((v, i) => {
+    if (v === "<5")        supX.push(years[i]);
+    else if (v === 0)      noneX.push(years[i]);
+    else {
+      barX.push(years[i]);
+      barY.push(v);
+      barText.push("Incidence rate: " + fmtRate(v) + " per 100,000");
+    }
+  });
+
+  const maxVal = barY.length ? Math.max(...barY) : 0;
+  const allSuppressed = barY.length === 0;
+
+  // Axis top leaves headroom; markers sit just above zero at the same height
+  const yTop = allSuppressed ? 10 : maxVal * 1.12;
+  const dotY = yTop * 0.04;
+
+  const traces = [
+    {
+      type: "bar", x: barX, y: barY,
+      marker: { color: COL.bar }, width: 0.6,
+      textposition: "none",
+      hovertext: barText,
+      hovertemplate: "%{hovertext}<extra></extra>"
+    },
+    {
+      type: "scatter", mode: "markers+text",
+      x: supX, y: supX.map(() => dotY),
+      marker: { color: COL.suppressed, size: 9 },
+      text: supX.map(() => "<5"),
+      textposition: "top center",
+      textfont: { color: COL.ink, size: 10, family: FONT },
+      hovertemplate: "Fewer than 5 cases reported (rate suppressed for privacy)<extra></extra>"
+    },
+    {
+      type: "scatter", mode: "markers",
+      x: noneX, y: noneX.map(() => dotY),
+      marker: { color: COL.none, size: 9 },
+      hovertemplate: "No cases reported<extra></extra>"
+    }
+  ];
+
+  const layout = {
+    title: {
+      text: "Incidence rate per 100,000 in " + place + " for " + condition,
+      font: { size: 13, family: FONT, color: COL.ink },
+      x: 0.02, xanchor: "left"
+    },
+    showlegend: false,
+    paper_bgcolor: "#fff",
+    plot_bgcolor: "#fff",
+    margin: { t: 50, r: 20, l: 60, b: 110 },
+    font: { family: FONT, color: COL.ink },
+    bargap: 0.4,
+    xaxis: {
+      type: "category",
+      categoryorder: "array",
+      categoryarray: years,
+      showgrid: false,
+      tickfont: { size: 11, color: COL.ink },
+      fixedrange: true
+    },
+    yaxis: {
+      title: { text: "Incidence rate per 100,000", font: { size: 11 } },
+      range: [0, yTop],
+      showticklabels: !allSuppressed,
+      showgrid: true,
+      gridcolor: COL.grid,
+      gridwidth: 0.6,
+      tickfont: { size: 11, color: COL.axis },
+      zeroline: false,
+      fixedrange: true
+    },
+    annotations: [
+      {
+        x: 0.49, y: -0.17, xref: "paper", yref: "paper",
+        xanchor: "right", showarrow: false,
+        text: '<span style="color:' + COL.suppressed + ';font-size:28px">\u25CF</span>  <b>Fewer than 5 cases (suppressed)</b>',
+        font: { size: 12, color: COL.ink, family: FONT }
+      },
+      {
+        x: 0.51, y: -0.17, xref: "paper", yref: "paper",
+        xanchor: "left", showarrow: false,
+        text: '<span style="color:' + COL.none + ';font-size:28px">\u25CF</span>  <b>No cases reported</b>',
+        font: { size: 12, color: COL.ink, family: FONT }
+      }
+    ]
+  };
+
+  Plotly.react("chart", traces, layout, { displayModeBar: false, responsive: true });
+}
+
+conditionSel.addEventListener("change", draw);
+countySel.addEventListener("change", draw);
+draw();
+</script>
+</body>
+</html>
