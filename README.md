@@ -45,5 +45,6 @@ Hover over or tap a bar to see the exact rate.
 
 ## Contact
 
-Maintained by Lekshmi Rita-Venugopal, MD, MPH, Epidemiologist Program Manager,
-Southwest District Health.
+Maintained by Lekshmi Rita-Venugopal
+Epidemiologist Program Manager 1
+Southwest District Health
